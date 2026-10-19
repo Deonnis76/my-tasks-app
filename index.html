@@ -38,6 +38,7 @@
         .btn-summarize:disabled { background: #ccc; cursor: not-allowed; }
         .privacy-note { font-size: 12px; color: #888; margin-top: 8px; font-style: italic; }
         .hidden { display: none; }
+        .detected-date { background: #e3f2fd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 14px; color: #1976D2; }
     </style>
 </head>
 <body>
@@ -55,8 +56,8 @@
             <div class="form-group">
                 <label>Описание:</label>
                 <textarea id="taskText" rows="4"></textarea>
-                <button class="btn-summarize" id="summarizeBtn"> Сжать до сути (опционально)</button>
-                <p class="privacy-note">️ При нажатии текст отправляется в Google Gemini для обработки. Не используйте для конфиденциальной информации.</p>
+                <button class="btn-summarize" id="summarizeBtn">🤖 Сжать до сути (опционально)</button>
+                <p class="privacy-note">⚠️ При нажатии текст отправляется в Google Gemini. Не используйте для конфиденциальной информации.</p>
             </div>
             <div class="form-group">
                 <label>Когда напомнить:</label>
@@ -74,6 +75,7 @@
                 <label>Выберите дату и время:</label>
                 <input type="datetime-local" id="customDateTime">
             </div>
+            <div id="detectedDateInfo" class="detected-date hidden"></div>
             <div class="btn-row">
                 <button class="btn btn-cancel" id="cancelBtn">Отмена</button>
                 <button class="btn btn-save" id="saveBtn">Сохранить</button>
@@ -82,7 +84,7 @@
     </div>
 
     <script>
-        // API ключ в base64 (GitHub не распознаёт как секрет)
+        // API ключ в base64
         const GEMINI_API_KEY = atob('QVEuQWI4Uk42SlVOZWFTakdJem9UTVNBaS1IbUVWRHJEaEt3VXVFVGtVWm5TS3M5LVZlTlE=');
 
         const micBtn = document.getElementById('micBtn');
@@ -98,14 +100,86 @@
         const cancelBtn = document.getElementById('cancelBtn');
         const saveBtn = document.getElementById('saveBtn');
         const summarizeBtn = document.getElementById('summarizeBtn');
+        const detectedDateInfo = document.getElementById('detectedDateInfo');
 
         let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
         let editingTaskId = null;
         let isRecording = false;
         let finalTranscript = '';
+        let detectedReminderDate = null;
 
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
+        }
+
+        // === ПАРСЕР ДАТ ИЗ ТЕКСТА ===
+        function parseDateFromText(text) {
+            const now = new Date();
+            const lowerText = text.toLowerCase();
+            
+            // "завтра"
+            if (lowerText.includes('завтра')) {
+                const tomorrow = new Date(now.getTime() + 24*60*60*1000);
+                let hour = 9;
+                const hourMatch = lowerText.match(/в\s+(\d{1,2})\s*(утра|вечера|дня|часов)?/);
+                if (hourMatch) {
+                    hour = parseInt(hourMatch[1]);
+                    if (hourMatch[2] === 'вечера' && hour < 12) hour += 12;
+                    if (hourMatch[2] === 'утра' && hour === 12) hour = 0;
+                }
+                tomorrow.setHours(hour, 0, 0, 0);
+                return { date: tomorrow, text: 'Завтра в ' + hour + ':00' };
+            }
+            
+            // "сегодня"
+            if (lowerText.includes('сегодня')) {
+                const today = new Date(now);
+                let hour = 20;
+                const hourMatch = lowerText.match(/в\s+(\d{1,2})\s*(утра|вечера|дня|часов)?/);
+                if (hourMatch) {
+                    hour = parseInt(hourMatch[1]);
+                    if (hourMatch[2] === 'вечера' && hour < 12) hour += 12;
+                }
+                today.setHours(hour, 0, 0, 0);
+                return { date: today, text: 'Сегодня в ' + hour + ':00' };
+            }
+            
+            // "через неделю/месяц/год"
+            if (lowerText.includes('через неделю')) {
+                const date = new Date(now.getTime() + 7*24*60*60*1000);
+                return { date: date, text: 'Через неделю' };
+            }
+            if (lowerText.includes('через месяц')) {
+                const date = new Date(now.getTime() + 30*24*60*60*1000);
+                return { date: date, text: 'Через месяц' };
+            }
+            if (lowerText.includes('через год')) {
+                const date = new Date(now.getTime() + 365*24*60*60*1000);
+                return { date: date, text: 'Через год' };
+            }
+            
+            // Дни недели
+            const days = ['воскресенье', 'понедельник', 'вторник', 'среду', 'четверг', 'пятницу', 'субботу'];
+            const dayNames = ['вс', 'пн', 'вт', 'ср', 'чт', 'пт', 'сб'];
+            for (let i = 0; i < days.length; i++) {
+                if (lowerText.includes(days[i]) || lowerText.includes(dayNames[i])) {
+                    const targetDay = i === 0 ? 0 : i;
+                    const currentDay = now.getDay();
+                    let daysUntil = targetDay - currentDay;
+                    if (daysUntil <= 0) daysUntil += 7;
+                    const date = new Date(now.getTime() + daysUntil*24*60*60*1000);
+                    let hour = 9;
+                    const hourMatch = lowerText.match(/в\s+(\d{1,2})\s*(утра|вечера|дня|часов)?/);
+                    if (hourMatch) {
+                        hour = parseInt(hourMatch[1]);
+                        if (hourMatch[2] === 'вечера' && hour < 12) hour += 12;
+                    }
+                    date.setHours(hour, 0, 0, 0);
+                    return { date: date, text: 'В ' + days[i] + ' в ' + hour + ':00' };
+                }
+            }
+            
+            return null;
         }
 
         reminderPreset.addEventListener('change', function() {
@@ -119,6 +193,7 @@
             }
         });
 
+        // === КНОПКА СЖАТИЯ (ИСПРАВЛЕННАЯ) ===
         summarizeBtn.addEventListener('click', async function() {
             const text = taskText.value.trim();
             if (!text) {
@@ -141,10 +216,19 @@
                                 parts: [{
                                     text: 'Сократи следующий текст до краткой задачи (1-2 предложения), сохранив основной смысл и действие. Убери все рассуждения, сомнения и лишние детали. Верни только краткую задачу без пояснений:\n\n' + text
                                 }]
-                            }]
+                            }],
+                            generationConfig: {
+                                temperature: 0.7,
+                                maxOutputTokens: 256
+                            }
                         })
                     }
                 );
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error('API ошибка: ' + (errorData.error?.message || response.status));
+                }
 
                 const data = await response.json();
                 
@@ -153,17 +237,18 @@
                     taskText.value = summarized;
                     statusEl.textContent = '✓ Текст сжат!';
                 } else {
-                    throw new Error('Неверный ответ от API');
+                    throw new Error('Пустой ответ от API');
                 }
             } catch (error) {
-                console.error('Ошибка:', error);
-                statusEl.textContent = '️ Ошибка сжатия: ' + error.message;
+                console.error('Ошибка сжатия:', error);
+                statusEl.textContent = '⚠️ Ошибка: ' + error.message;
             } finally {
                 summarizeBtn.disabled = false;
-                summarizeBtn.textContent = ' Сжать до сути (опционально)';
+                summarizeBtn.textContent = '🤖 Сжать до сути (опционально)';
             }
         });
 
+        // === ГОЛОСОВОЕ РАСПОЗНАВАНИЕ (УЛУЧШЕННОЕ) ===
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
 
@@ -172,6 +257,7 @@
             recognition.lang = 'ru-RU';
             recognition.interimResults = false;
             recognition.continuous = true;
+            recognition.maxAlternatives = 1;
 
             recognition.onresult = function(event) {
                 let text = '';
@@ -179,19 +265,28 @@
                     text += event.results[i][0].transcript + ' ';
                 }
                 finalTranscript = text.trim();
+                console.log('Распознано:', finalTranscript);
             };
 
             recognition.onend = function() {
+                console.log('Recognition ended. isRecording:', isRecording);
                 if (isRecording) {
-                    try { recognition.start(); } catch(e) {}
+                    try { recognition.start(); } catch(e) {
+                        console.error('Ошибка перезапуска:', e);
+                    }
                 }
             };
 
             recognition.onerror = function(event) {
-                console.log('Speech error:', event.error);
-                if (event.error === 'no-speech' || event.error === 'aborted') return;
-                if (isRecording) {
-                    statusEl.textContent = '⚠️ Ошибка: ' + event.error;
+                console.error('Speech error:', event.error);
+                if (event.error === 'no-speech') {
+                    statusEl.textContent = '⚠️ Речь не обнаружена. Говорите громче.';
+                } else if (event.error === 'not-allowed') {
+                    statusEl.textContent = '⚠️ Микрофон заблокирован. Разрешите доступ в настройках браузера.';
+                } else if (event.error === 'aborted') {
+                    // Игнорируем
+                } else {
+                    statusEl.textContent = '⚠️ Ошибка микрофона: ' + event.error;
                 }
             };
         } else {
@@ -200,7 +295,10 @@
         }
 
         micBtn.addEventListener('click', function() {
-            if (!recognition) return;
+            if (!recognition) {
+                alert('Голосовой ввод не поддерживается. Используйте Google Chrome.');
+                return;
+            }
 
             if (!isRecording) {
                 finalTranscript = '';
@@ -208,7 +306,10 @@
                 micBtn.textContent = '⏹️ Закончить запись';
                 micBtn.classList.add('recording');
                 statusEl.textContent = '🔴 Идёт запись... Говорите...';
-                try { recognition.start(); } catch(e) {}
+                try { recognition.start(); } catch(e) {
+                    console.error('Ошибка start:', e);
+                    statusEl.textContent = '⚠️ Ошибка запуска микрофона';
+                }
             } else {
                 isRecording = false;
                 micBtn.textContent = '🎙️ Начать запись';
@@ -218,6 +319,18 @@
                 if (finalTranscript) {
                     statusEl.textContent = '✓ Распознано: ' + finalTranscript;
                     taskText.value = finalTranscript;
+                    
+                    // Парсим дату из текста
+                    const dateResult = parseDateFromText(finalTranscript);
+                    if (dateResult) {
+                        detectedReminderDate = dateResult.date;
+                        detectedDateInfo.textContent = '📅 Обнаружена дата: ' + dateResult.text;
+                        detectedDateInfo.classList.remove('hidden');
+                    } else {
+                        detectedReminderDate = null;
+                        detectedDateInfo.classList.add('hidden');
+                    }
+                    
                     reminderPreset.value = '';
                     customDateTimeGroup.classList.add('hidden');
                     customDateTime.value = '';
@@ -226,7 +339,7 @@
                     taskModal.classList.add('active');
                     finalTranscript = '';
                 } else {
-                    statusEl.textContent = 'Ничего не распознано. Попробуйте ещё раз.';
+                    statusEl.textContent = 'Ничего не распознано. Попробуйте ещё раз. (Проверьте разрешение микрофона)';
                 }
             }
         });
@@ -236,6 +349,8 @@
             reminderPreset.value = '';
             customDateTimeGroup.classList.add('hidden');
             customDateTime.value = '';
+            detectedDateInfo.classList.add('hidden');
+            detectedReminderDate = null;
             editingTaskId = null;
             modalTitle.textContent = 'Новая задача';
             taskModal.classList.add('active');
@@ -256,7 +371,10 @@
             const preset = reminderPreset.value;
             const now = new Date();
 
-            if (preset === 'today') {
+            // Приоритет: detectedReminderDate (из голоса) > preset > custom
+            if (detectedReminderDate) {
+                reminderDate = detectedReminderDate;
+            } else if (preset === 'today') {
                 reminderDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0);
             } else if (preset === 'tomorrow') {
                 reminderDate = new Date(now.getTime() + 24*60*60*1000);
@@ -292,6 +410,8 @@
 
             localStorage.setItem('tasks', JSON.stringify(tasks));
             taskModal.classList.remove('active');
+            detectedDateInfo.classList.add('hidden');
+            detectedReminderDate = null;
             renderTasks();
         });
 
@@ -325,6 +445,8 @@
                     reminderPreset.value = '';
                     customDateTimeGroup.classList.add('hidden');
                     customDateTime.value = '';
+                    detectedDateInfo.classList.add('hidden');
+                    detectedReminderDate = null;
                     modalTitle.textContent = 'Редактировать задачу';
                     taskModal.classList.add('active');
                 }
@@ -360,7 +482,7 @@
                 html += '<div class="task-actions">';
                 html += '<button class="task-btn btn-done" data-action="done" data-id="' + task.id + '">' + doneBtnText + '</button>';
                 html += '<button class="task-btn btn-edit" data-action="edit" data-id="' + task.id + '">✏️ Изменить</button>';
-                html += '<button class="task-btn btn-delete" data-action="delete" data-id="' + task.id + '"> Удалить</button>';
+                html += '<button class="task-btn btn-delete" data-action="delete" data-id="' + task.id + '">✕ Удалить</button>';
                 html += '</div>';
                 html += '</div>';
             }
@@ -416,7 +538,7 @@
             } catch(e) {}
 
             if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification(' Напоминание', { body: task.text, requireInteraction: true });
+                new Notification('⏰ Напоминание', { body: task.text, requireInteraction: true });
             }
 
             setTimeout(function() {
