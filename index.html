@@ -97,6 +97,9 @@ var _p3 = '56w';
 var API_KEY = _p1 + _p2 + _p3;
 var API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=' + API_KEY;
 
+var SERPER_KEY = 'c5cb866c8dd1f56d63f98d4cc925191c7c72ea27';
+var SERPER_URL = 'https://google.serper.dev/search';
+
 var micBtn = document.getElementById('micBtn');
 var addBtn = document.getElementById('addBtn');
 var statusEl = document.getElementById('status');
@@ -421,34 +424,63 @@ taskListEl.addEventListener('click', function(e) {
         for (var i = 0; i < tasks.length; i++) { if (tasks[i].id === id) { task = tasks[i]; break; } }
         if (task) {
             btn.disabled = true;
-            btn.textContent = 'Анализирую...';
+            btn.textContent = 'Ищу в Google...';
             
-            var locationInfo = userLocation ? 'Пользователь находится в: ' + userLocation + '. ' : 'Местоположение пользователя неизвестно. ';
+            var locationInfo = userLocation ? userLocation : '';
+            var searchQuery = task.text + (locationInfo ? ' ' + locationInfo : '');
             
-            var prompt = 'Ты практический помощник. Анализируй задачу КОНКРЕТНО под ситуацию пользователя. ' +
-                locationInfo +
-                'ПРАВИЛА: ' +
-                '1. Сначала проанализируй: где пользователь, что именно ему нужно, какой контекст задачи. ' +
-                '2. Если задача про поиск сервисов/сайтов/мест — давай ссылки ТОЛЬКО на сервисы, актуальные для его страны/города. ' +
-                '3. Если пользователь во Вьетнаме — НЕ предлагай Авито, Юлу, российские сервисы. Предлагай: Facebook Marketplace, Chợ Tốt, Zalo, Shopee, Lazada, местные сайты. ' +
-                '4. Если пользователь в России — предлагай: Авито, Юла, Яндекс.Услуги и т.д. ' +
-                '5. Если задача неясна или не хватает информации — ЗАДАЙ 1-2 уточняющих вопроса вместо того чтобы давать бесполезные ссылки. ' +
-                '6. НЕ давай общих советов типа "попробуйте найти", "обратите внимание". ' +
-                '7. Давай конкретные ссылки с названиями сервисов. ' +
-                '8. Если задача простая и не требует поиска — напиши "Задача ясна" и всё. ' +
-                'Формат ответа: краткий анализ ситуации + конкретные ссылки/решения ИЛИ уточняющие вопросы. ' +
-                'Задача пользователя: ' + task.text;
-            
-            fetch(API_URL, {
+            fetch(SERPER_URL, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'X-API-KEY': SERPER_KEY,
+                    'Content-Type': 'application/json'
+                },
                 body: JSON.stringify({
-                    contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.5, maxOutputTokens: 1024 }
+                    q: searchQuery,
+                    num: 10,
+                    gl: 'vn',
+                    hl: 'ru'
                 })
             })
             .then(function(r) { 
-                if (!r.ok) throw new Error('HTTP ' + r.status);
+                if (!r.ok) throw new Error('Serper: HTTP ' + r.status);
+                return r.json(); 
+            })
+            .then(function(searchData) {
+                btn.textContent = 'Анализирую...';
+                
+                var organicResults = searchData.organic || [];
+                var resultsText = organicResults.map(function(item, idx) {
+                    return (idx + 1) + '. ' + item.title + ' — ' + item.link + ' — ' + (item.snippet || '');
+                }).join('\n');
+                
+                if (organicResults.length === 0) {
+                    resultsText = 'Поиск не дал результатов.';
+                }
+                
+                var prompt = 'Ты практический помощник. Пользователь находится в: ' + locationInfo + '.\n\n' +
+                    'Задача пользователя: ' + task.text + '\n\n' +
+                    'Вот РЕАЛЬНЫЕ результаты поиска Google по этой задаче:\n' + resultsText + '\n\n' +
+                    'ПРАВИЛА:\n' +
+                    '1. Проанализируй эти реальные результаты.\n' +
+                    '2. Выбери только РЕЛЕВАНТНЫЕ и РАБОЧИЕ сайты/сервисы для задачи пользователя.\n' +
+                    '3. Дай список с названиями и ссылками.\n' +
+                    '4. НЕ выдумывай сайты — используй только те, что есть в результатах поиска.\n' +
+                    '5. Если ни один результат не подходит — честно скажи об этом.\n' +
+                    '6. Отвечай на русском языке, кратко и по делу.\n' +
+                    '7. Формат: название сайта — ссылка — короткое описание (1 предложение).';
+                
+                return fetch(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: prompt }] }],
+                        generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
+                    })
+                });
+            })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('Gemini: HTTP ' + r.status);
                 return r.json(); 
             })
             .then(function(data) {
@@ -463,7 +495,7 @@ taskListEl.addEventListener('click', function(e) {
                 }
             })
             .catch(function(e) {
-                alert('Ошибка ИИ: ' + e.message);
+                alert('Ошибка: ' + e.message);
             })
             .finally(function() {
                 btn.disabled = false;
