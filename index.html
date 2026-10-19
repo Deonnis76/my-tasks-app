@@ -23,8 +23,10 @@ button { width: 100%; padding: 20px; margin: 10px 0; border: none; border-radius
 .edit-btn { background: #2196F3; color: white; }
 .del-btn { background: #ff4b4b; color: white; }
 .ai-btn { background: #9C27B0; color: white; }
-.ai-result { background: #f3e5f5; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 14px; color: #6a1b9a; line-height: 1.5; }
-.ai-result a { color: #6a1b9a; text-decoration: underline; word-break: break-all; display: inline-block; margin: 5px 0; }
+.ai-result { background: #f3e5f5; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 14px; color: #6a1b9a; line-height: 1.6; }
+.ai-result a { color: #6a1b9a; text-decoration: underline; word-break: break-all; display: inline-block; margin: 4px 0; }
+.ai-result ol, .ai-result ul { margin: 8px 0; padding-left: 25px; }
+.ai-result li { margin: 6px 0; }
 .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
 .modal.on { display: flex; }
 .modal-box { background: white; border-radius: 15px; padding: 25px; max-width: 500px; width: 100%; }
@@ -118,9 +120,25 @@ var mediaRecorder = null;
 var audioChunks = [];
 var timerInterval = null;
 var seconds = 0;
+var userLocation = '';
 
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
+}
+
+if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(function(pos) {
+        var lat = pos.coords.latitude;
+        var lon = pos.coords.longitude;
+        fetch('https://geocoding-api.open-meteo.com/v1/search?latitude=' + lat + '&longitude=' + lon + '&count=1&language=ru')
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.results && data.results[0]) {
+                userLocation = data.results[0].country + ', ' + data.results[0].name;
+            }
+        })
+        .catch(function() { userLocation = 'Неизвестно'; });
+    }, function() { userLocation = 'Неизвестно'; });
 }
 
 function parseDate(text) {
@@ -403,25 +421,30 @@ taskListEl.addEventListener('click', function(e) {
         for (var i = 0; i < tasks.length; i++) { if (tasks[i].id === id) { task = tasks[i]; break; } }
         if (task) {
             btn.disabled = true;
-            btn.textContent = 'Ищу...';
+            btn.textContent = 'Анализирую...';
             
-            var prompt = 'Ты практический помощник. Твоя задача — дать КОНКРЕТНЫЕ ссылки и инструменты для выполнения задачи. НЕ давай общих советов. НЕ пиши очевидные вещи. ' +
+            var locationInfo = userLocation ? 'Пользователь находится в: ' + userLocation + '. ' : 'Местоположение пользователя неизвестно. ';
+            
+            var prompt = 'Ты практический помощник. Анализируй задачу КОНКРЕТНО под ситуацию пользователя. ' +
+                locationInfo +
                 'ПРАВИЛА: ' +
-                '1. Если задача про поиск (сайты, сервисы, магазины, места) — сразу дай 3-5 конкретных ссылок на реальные сервисы. ' +
-                '2. Используй реальные URL: Avito (https://www.avito.ru), Юла (https://youla.ru), OLX, Google Maps, Google Flights, Booking.com и т.д. ' +
-                '3. Если не знаешь конкретный сервис — дай ссылку на Google поиск с запросом: https://www.google.com/search?q=КОНКРЕТНЫЙ_ЗАПРОС ' +
-                '4. Формат ответа: короткое предложение + список ссылок с названиями. ' +
-                '5. НЕ пиши: "вам понадобятся", "попробуйте найти", "обратите внимание". ' +
-                '6. Пиши сразу: "Вот ссылки:" и давай список. ' +
-                '7. Если задача простая и не требует поиска — напиши "Задача ясна" и всё. ' +
-                'Задача: ' + task.text;
+                '1. Сначала проанализируй: где пользователь, что именно ему нужно, какой контекст задачи. ' +
+                '2. Если задача про поиск сервисов/сайтов/мест — давай ссылки ТОЛЬКО на сервисы, актуальные для его страны/города. ' +
+                '3. Если пользователь во Вьетнаме — НЕ предлагай Авито, Юлу, российские сервисы. Предлагай: Facebook Marketplace, Chợ Tốt, Zalo, Shopee, Lazada, местные сайты. ' +
+                '4. Если пользователь в России — предлагай: Авито, Юла, Яндекс.Услуги и т.д. ' +
+                '5. Если задача неясна или не хватает информации — ЗАДАЙ 1-2 уточняющих вопроса вместо того чтобы давать бесполезные ссылки. ' +
+                '6. НЕ давай общих советов типа "попробуйте найти", "обратите внимание". ' +
+                '7. Давай конкретные ссылки с названиями сервисов. ' +
+                '8. Если задача простая и не требует поиска — напиши "Задача ясна" и всё. ' +
+                'Формат ответа: краткий анализ ситуации + конкретные ссылки/решения ИЛИ уточняющие вопросы. ' +
+                'Задача пользователя: ' + task.text;
             
             fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.5, maxOutputTokens: 512 }
+                    generationConfig: { temperature: 0.5, maxOutputTokens: 1024 }
                 })
             })
             .then(function(r) { 
@@ -433,7 +456,7 @@ taskListEl.addEventListener('click', function(e) {
                     var result = data.candidates[0].content.parts[0].text.trim();
                     var resultDiv = document.createElement('div');
                     resultDiv.className = 'ai-result';
-                    resultDiv.innerHTML = result.replace(/\n/g, '<br>');
+                    resultDiv.innerHTML = result.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
                     btn.parentNode.parentNode.appendChild(resultDiv);
                 } else {
                     throw new Error('Пустой ответ');
@@ -526,7 +549,7 @@ var voiceDateStatus = document.getElementById('voiceDateStatus');
 voiceDateBtn.addEventListener('click', function() {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        voiceDateStatus.textContent = ' Браузер не поддерживает голосовой ввод.';
+        voiceDateStatus.textContent = '❌ Браузер не поддерживает голосовой ввод.';
         return;
     }
     var recognition = new SpeechRecognition();
