@@ -24,7 +24,7 @@ button { width: 100%; padding: 20px; margin: 10px 0; border: none; border-radius
 .del-btn { background: #ff4b4b; color: white; }
 .ai-btn { background: #9C27B0; color: white; }
 .ai-result { background: #f3e5f5; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 14px; color: #6a1b9a; line-height: 1.5; }
-.ai-result a { color: #6a1b9a; text-decoration: underline; word-break: break-all; }
+.ai-result a { color: #6a1b9a; text-decoration: underline; word-break: break-all; display: inline-block; margin: 5px 0; }
 .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
 .modal.on { display: flex; }
 .modal-box { background: white; border-radius: 15px; padding: 25px; max-width: 500px; width: 100%; }
@@ -403,28 +403,25 @@ taskListEl.addEventListener('click', function(e) {
         for (var i = 0; i < tasks.length; i++) { if (tasks[i].id === id) { task = tasks[i]; break; } }
         if (task) {
             btn.disabled = true;
-            btn.textContent = 'Думаю...';
+            btn.textContent = 'Ищу...';
             
-            var prompt = 'Ты дружелюбный помощник. Твоя задача — мягко помочь человеку с его задачей, но НЕ учить и НЕ давить. ' +
-                'Стиль общения: тёплый, поддерживающий, как у хорошего друга. Используй фразы типа "может быть полезно", "если хочешь", "попробуй, если интересно". ' +
-                'Проанализируй задачу и подумай: ' +
-                '1. Если задача связана с поиском (билеты, отели, рестораны, магазины, услуги, тренажёрные залы) — дай 1-2 мягких совета и создай готовые ссылки для поиска. ' +
-                '2. Если задача большая и сложная — помоги разбить её на маленькие шаги, но не дави. ' +
-                '3. Если задача простая и понятная — просто поддержи человека ("Отличная задача!", "Удачи с этим!"). ' +
-                '4. Если видишь, что человек может забыть что-то важное — мягко напомни ("Не забудь также про...", "Может быть, стоит подумать о..."). ' +
-                'Используй реальные URL: для билетов — https://www.google.com/travel/flights?q=ОТКУДА+КУДА, ' +
-                'для отелей — https://www.google.com/travel/hotels?q=ГОРОД, ' +
-                'для поиска мест — https://www.google.com/maps/search/ЧТО+ИЩЕМ, ' +
-                'для товаров — https://www.google.com/search?q=ТОВАР+купить. ' +
-                'Отвечай кратко (3-5 предложений максимум) на русском языке. Не будь ментором — будь другом. ' +
-                'Задача пользователя: ' + task.text;
+            var prompt = 'Ты практический помощник. Твоя задача — дать КОНКРЕТНЫЕ ссылки и инструменты для выполнения задачи. НЕ давай общих советов. НЕ пиши очевидные вещи. ' +
+                'ПРАВИЛА: ' +
+                '1. Если задача про поиск (сайты, сервисы, магазины, места) — сразу дай 3-5 конкретных ссылок на реальные сервисы. ' +
+                '2. Используй реальные URL: Avito (https://www.avito.ru), Юла (https://youla.ru), OLX, Google Maps, Google Flights, Booking.com и т.д. ' +
+                '3. Если не знаешь конкретный сервис — дай ссылку на Google поиск с запросом: https://www.google.com/search?q=КОНКРЕТНЫЙ_ЗАПРОС ' +
+                '4. Формат ответа: короткое предложение + список ссылок с названиями. ' +
+                '5. НЕ пиши: "вам понадобятся", "попробуйте найти", "обратите внимание". ' +
+                '6. Пиши сразу: "Вот ссылки:" и давай список. ' +
+                '7. Если задача простая и не требует поиска — напиши "Задача ясна" и всё. ' +
+                'Задача: ' + task.text;
             
             fetch(API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     contents: [{ parts: [{ text: prompt }] }],
-                    generationConfig: { temperature: 0.7, maxOutputTokens: 512 }
+                    generationConfig: { temperature: 0.5, maxOutputTokens: 512 }
                 })
             })
             .then(function(r) { 
@@ -529,7 +526,7 @@ var voiceDateStatus = document.getElementById('voiceDateStatus');
 voiceDateBtn.addEventListener('click', function() {
     var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
-        voiceDateStatus.textContent = '❌ Браузер не поддерживает голосовой ввод.';
+        voiceDateStatus.textContent = ' Браузер не поддерживает голосовой ввод.';
         return;
     }
     var recognition = new SpeechRecognition();
