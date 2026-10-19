@@ -39,12 +39,14 @@ button { width: 100%; padding: 20px; margin: 10px 0; border: none; border-radius
 .detected { background: #e3f2fd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 14px; color: #1976D2; }
 .hidden { display: none; }
 .empty { text-align: center; color: white; padding: 40px; font-size: 18px; }
+.timer { text-align: center; color: #ff4b4b; font-size: 24px; font-weight: bold; margin: 10px 0; }
 </style>
 </head>
 <body>
 <div class="container">
 <h1>Мои Задачи</h1>
 <button class="mic" id="micBtn">Начать запись</button>
+<div id="timer" class="timer hidden">00:00</div>
 <button class="add" id="addBtn">Добавить задачу вручную</button>
 <p class="status" id="status"></p>
 <div id="taskList"></div>
@@ -96,12 +98,15 @@ var mDetected = document.getElementById('mDetected');
 var mCancel = document.getElementById('mCancel');
 var mSave = document.getElementById('mSave');
 var sumBtn = document.getElementById('sumBtn');
+var timerEl = document.getElementById('timer');
 
 var tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
 var editId = null;
 var recording = false;
-var transcript = '';
-var detectedDate = null;
+var mediaRecorder = null;
+var audioChunks = [];
+var timerInterval = null;
+var seconds = 0;
 
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
@@ -127,16 +132,13 @@ function parseDate(text) {
         return { date: d2, text: 'Сегодня в ' + (h < 12 ? h + 12 : h) + ':00' };
     }
     if (t.indexOf('через неделю') >= 0) {
-        var d3 = new Date(now.getTime() + 7 * 86400000);
-        return { date: d3, text: 'Через неделю' };
+        return { date: new Date(now.getTime() + 7 * 86400000), text: 'Через неделю' };
     }
     if (t.indexOf('через месяц') >= 0) {
-        var d4 = new Date(now.getTime() + 30 * 86400000);
-        return { date: d4, text: 'Через месяц' };
+        return { date: new Date(now.getTime() + 30 * 86400000), text: 'Через месяц' };
     }
     if (t.indexOf('через год') >= 0) {
-        var d5 = new Date(now.getTime() + 365 * 86400000);
-        return { date: d5, text: 'Через год' };
+        return { date: new Date(now.getTime() + 365 * 86400000), text: 'Через год' };
     }
     var days = ['воскресенье','понедельник','вторник','среду','четверг','пятницу','субботу'];
     for (var i = 0; i < days.length; i++) {
@@ -152,12 +154,14 @@ function parseDate(text) {
     return null;
 }
 
+function formatTime(s) {
+    var m = Math.floor(s / 60);
+    var sec = s % 60;
+    return (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
+}
+
 mPreset.addEventListener('change', function() {
-    if (this.value === 'custom') {
-        mDateGroup.classList.remove('hidden');
-    } else {
-        mDateGroup.classList.add('hidden');
-    }
+    mDateGroup.classList.toggle('hidden', this.value !== 'custom');
 });
 
 sumBtn.addEventListener('click', function() {
@@ -193,73 +197,97 @@ sumBtn.addEventListener('click', function() {
     });
 });
 
-var SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-var rec = null;
-if (SpeechRec) {
-    rec = new SpeechRec();
-    rec.lang = 'ru-RU';
-    rec.interimResults = false;
-    rec.continuous = true;
-    rec.onresult = function(e) {
-        var t = '';
-        for (var i = 0; i < e.results.length; i++) {
-            t += e.results[i][0].transcript + ' ';
-        }
-        transcript = t.trim();
-    };
-    rec.onend = function() {
-        if (recording) {
-            setTimeout(function() { try { rec.start(); } catch(e){} }, 100);
-        }
-    };
-    rec.onerror = function(e) {
-        if (e.error === 'not-allowed') {
-            statusEl.textContent = 'Микрофон заблокирован';
-            recording = false;
-            micBtn.textContent = 'Начать запись';
-            micBtn.classList.remove('rec');
-        }
-    };
-} else {
-    micBtn.disabled = true;
-    micBtn.textContent = 'Голос не поддерживается (нужен Chrome)';
-}
-
-micBtn.addEventListener('click', function() {
-    if (!rec) { alert('Используйте Chrome'); return; }
+// Запись аудио через MediaRecorder (без ограничений Chrome)
+micBtn.addEventListener('click', async function() {
     if (!recording) {
-        transcript = '';
-        recording = true;
-        micBtn.textContent = 'Закончить запись';
-        micBtn.classList.add('rec');
-        statusEl.textContent = 'Говорите...';
-        try { rec.start(); } catch(e) { statusEl.textContent = 'Ошибка микрофона'; }
+        try {
+            var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRecorder = new MediaRecorder(stream);
+            audioChunks = [];
+            
+            mediaRecorder.ondataavailable = function(e) {
+                audioChunks.push(e.data);
+            };
+            
+            mediaRecorder.onstop = async function() {
+                var audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                statusEl.textContent = 'Распознаю речь...';
+                
+                // Конвертируем в base64
+                var reader = new FileReader();
+                reader.onloadend = async function() {
+                    var base64Audio = reader.result.split(',')[1];
+                    
+                    // Отправляем аудио в Gemini для транскрибации
+                    try {
+                        var response = await fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + API_KEY, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                contents: [{
+                                    parts: [
+                                        { text: 'Расшифруй эту аудиозапись речи на русском языке. Верни только текст, без пояснений.' },
+                                        { inline_data: { mime_type: 'audio/webm', data: base64Audio } }
+                                    ]
+                                }],
+                                generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
+                            })
+                        });
+                        
+                        var data = await response.json();
+                        
+                        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                            var text = data.candidates[0].content.parts[0].text.trim();
+                            statusEl.textContent = 'Распознано: ' + text;
+                            mText.value = text;
+                            
+                            var dr = parseDate(text);
+                            if (dr) {
+                                mDetected.textContent = 'Обнаружена дата: ' + dr.text;
+                                mDetected.classList.remove('hidden');
+                            } else {
+                                mDetected.classList.add('hidden');
+                            }
+                            
+                            mPreset.value = '';
+                            mDateGroup.classList.add('hidden');
+                            editId = null;
+                            mTitle.textContent = 'Новая задача (голос)';
+                            modal.classList.add('on');
+                        } else {
+                            statusEl.textContent = 'Ошибка распознавания: ' + (data.error ? data.error.message : 'неизвестно');
+                        }
+                    } catch (e) {
+                        statusEl.textContent = 'Ошибка: ' + e.message;
+                    }
+                };
+                reader.readAsDataURL(audioBlob);
+            };
+            
+            mediaRecorder.start();
+            recording = true;
+            seconds = 0;
+            micBtn.textContent = 'Закончить запись';
+            micBtn.classList.add('rec');
+            timerEl.classList.remove('hidden');
+            statusEl.textContent = 'Говорите...';
+            
+            timerInterval = setInterval(function() {
+                seconds++;
+                timerEl.textContent = formatTime(seconds);
+            }, 1000);
+            
+        } catch (e) {
+            statusEl.textContent = 'Ошибка микрофона: ' + e.message;
+        }
     } else {
+        mediaRecorder.stop();
+        mediaRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
         recording = false;
         micBtn.textContent = 'Начать запись';
         micBtn.classList.remove('rec');
-        try { rec.stop(); } catch(e) {}
-        if (transcript) {
-            statusEl.textContent = 'Распознано: ' + transcript;
-            mText.value = transcript;
-            var dr = parseDate(transcript);
-            if (dr) {
-                detectedDate = dr.date;
-                mDetected.textContent = 'Обнаружена дата: ' + dr.text;
-                mDetected.classList.remove('hidden');
-            } else {
-                detectedDate = null;
-                mDetected.classList.add('hidden');
-            }
-            mPreset.value = '';
-            mDateGroup.classList.add('hidden');
-            editId = null;
-            mTitle.textContent = 'Новая задача (голос)';
-            modal.classList.add('on');
-            transcript = '';
-        } else {
-            statusEl.textContent = 'Ничего не распознано';
-        }
+        timerEl.classList.add('hidden');
+        clearInterval(timerInterval);
     }
 });
 
@@ -269,7 +297,6 @@ addBtn.addEventListener('click', function() {
     mDateGroup.classList.add('hidden');
     mDate.value = '';
     mDetected.classList.add('hidden');
-    detectedDate = null;
     editId = null;
     mTitle.textContent = 'Новая задача';
     modal.classList.add('on');
@@ -285,9 +312,7 @@ mSave.addEventListener('click', function() {
     var rDate = null;
     var preset = mPreset.value;
     var now = new Date();
-    if (detectedDate) {
-        rDate = detectedDate;
-    } else if (preset === 'today') {
+    if (preset === 'today') {
         rDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0);
     } else if (preset === 'tomorrow') {
         rDate = new Date(now.getTime() + 86400000);
@@ -316,7 +341,6 @@ mSave.addEventListener('click', function() {
     localStorage.setItem('tasks', JSON.stringify(tasks));
     modal.classList.remove('on');
     mDetected.classList.add('hidden');
-    detectedDate = null;
     renderTasks();
 });
 
@@ -347,7 +371,6 @@ taskListEl.addEventListener('click', function(e) {
             mDateGroup.classList.add('hidden');
             mDate.value = '';
             mDetected.classList.add('hidden');
-            detectedDate = null;
             mTitle.textContent = 'Редактировать';
             modal.classList.add('on');
         }
