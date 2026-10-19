@@ -86,7 +86,8 @@ var _p1 = 'AQ.Ab8RN6J20JFrZkONjLdSsHz_';
 var _p2 = 'zL6RzXy0WQRnghJgq0WT0h-';
 var _p3 = '56w';
 var API_KEY = _p1 + _p2 + _p3;
-var API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.8-flash:generateContent?key=' + API_KEY;
+var VOICE_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.8-flash:generateContent?key=' + API_KEY;
+var SUM_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=' + API_KEY;
 
 var micBtn = document.getElementById('micBtn');
 var addBtn = document.getElementById('addBtn');
@@ -175,25 +176,30 @@ sumBtn.addEventListener('click', function() {
     sumBtn.textContent = 'Сжимаю...';
     statusEl.textContent = 'ИИ анализирует...';
     
-    fetch(API_URL, {
+    var prompt = 'Ты помощник для составления кратких задач из голосовых заметок. Проанализируй текст и выдели из него КОНКРЕТНУЮ ЗАДАЧУ — что именно нужно сделать. Сохрани все важные детали (сроки, суммы, названия). Убери только воду, сомнения, рассуждения. Верни 1-3 коротких предложения. Текст: ' + text;
+    
+    fetch(SUM_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Сократи до 1-2 предложений, сохранив смысл и действие. Только задача, без пояснений:\n\n' + text }] }],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 256 }
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.5, maxOutputTokens: 512 }
         })
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) { 
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json(); 
+    })
     .then(function(data) {
         if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
             mText.value = data.candidates[0].content.parts[0].text.trim();
             statusEl.textContent = 'Текст сжат!';
         } else {
-            statusEl.textContent = 'Ошибка: ' + (data.error ? data.error.message : JSON.stringify(data).substring(0, 200));
+            throw new Error('Пустой ответ');
         }
     })
     .catch(function(e) {
-        statusEl.textContent = 'Ошибка: ' + e.message;
+        statusEl.textContent = 'Ошибка сжатия: ' + e.message;
     })
     .finally(function() {
         sumBtn.disabled = false;
@@ -227,7 +233,7 @@ micBtn.addEventListener('click', async function() {
                     var base64Audio = reader.result.split(',')[1];
                     
                     try {
-                        var response = await fetch(API_URL, {
+                        var response = await fetch(VOICE_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -262,7 +268,7 @@ micBtn.addEventListener('click', async function() {
                             mTitle.textContent = 'Новая задача (голос)';
                             modal.classList.add('on');
                         } else {
-                            statusEl.textContent = 'Ошибка: ' + (data.error ? data.error.message : JSON.stringify(data).substring(0, 200));
+                            statusEl.textContent = 'Ошибка: ' + (data.error ? data.error.message : 'не распознано');
                         }
                     } catch (e) {
                         statusEl.textContent = 'Ошибка: ' + e.message;
