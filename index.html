@@ -78,7 +78,7 @@ button { width: 100%; padding: 20px; margin: 10px 0; border: none; border-radius
 <label>Дата и время:</label>
 <div style="display: flex; gap: 8px;">
     <input type="datetime-local" id="mDate" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
-    <button type="button" id="voiceDateBtn" style="width: auto; padding: 10px; font-size: 18px; background: #2196F3; color: white; border: none; border-radius: 8px; cursor: pointer;" title="Сказать дату голосом">🎤</button>
+    <button type="button" id="voiceDateBtn" style="width: auto; padding: 10px; font-size: 18px; background: #2196F3; color: white; border: none; border-radius: 8px; cursor: pointer;" title="Сказать дату голосом"></button>
 </div>
 <div id="voiceDateStatus" style="font-size: 12px; color: #1976D2; margin-top: 4px; min-height: 18px;"></div>
 </div>
@@ -125,6 +125,12 @@ var timerInterval = null;
 var seconds = 0;
 var userLocation = '';
 
+// Очередь запросов и кэш
+var requestQueue = [];
+var isProcessing = false;
+var lastRequestTime = 0;
+var aiCache = JSON.parse(localStorage.getItem('aiCache') || '{}');
+
 if ('Notification' in window && Notification.permission === 'default') {
     Notification.requestPermission();
 }
@@ -142,6 +148,51 @@ if (navigator.geolocation) {
         })
         .catch(function() { userLocation = 'Неизвестно'; });
     }, function() { userLocation = 'Неизвестно'; });
+}
+
+// Функция ожидания между запросами (5 секунд)
+function waitForQueue() {
+    return new Promise(function(resolve) {
+        var now = Date.now();
+        var timeSinceLast = now - lastRequestTime;
+        var waitTime = Math.max(0, 5000 - timeSinceLast);
+        setTimeout(resolve, waitTime);
+    });
+}
+
+// Функция запроса к Gemini с повторными попытками
+function fetchWithRetry(url, options, maxRetries) {
+    maxRetries = maxRetries || 3;
+    return new Promise(function(resolve, reject) {
+        function attempt(retryCount) {
+            fetch(url, options)
+            .then(function(response) {
+                if (response.status === 503 && retryCount < maxRetries) {
+                    // Сервер недоступен, ждём и пробуем снова
+                    setTimeout(function() {
+                        attempt(retryCount + 1);
+                    }, 3000 * (retryCount + 1));
+                } else if (response.status === 429 && retryCount < maxRetries) {
+                    // Лимит исчерпан, ждём дольше
+                    setTimeout(function() {
+                        attempt(retryCount + 1);
+                    }, 10000 * (retryCount + 1));
+                } else {
+                    resolve(response);
+                }
+            })
+            .catch(function(error) {
+                if (retryCount < maxRetries) {
+                    setTimeout(function() {
+                        attempt(retryCount + 1);
+                    }, 3000);
+                } else {
+                    reject(error);
+                }
+            });
+        }
+        attempt(0);
+    });
 }
 
 function parseDate(text) {
@@ -205,7 +256,7 @@ sumBtn.addEventListener('click', function() {
     
     var prompt = 'Ты помощник для составления кратких задач из голосовых заметок. Проанализируй текст и выдели из него КОНКРЕТНУЮ ЗАДАЧУ — что именно нужно сделать. Сохрани все важные детали (сроки, суммы, названия). Убери только воду, сомнения, рассуждения. Верни 1-3 коротких предложения. Текст: ' + text;
     
-    fetch(API_URL, {
+    fetchWithRetry(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -231,6 +282,7 @@ sumBtn.addEventListener('click', function() {
     .finally(function() {
         sumBtn.disabled = false;
         sumBtn.textContent = 'Сжать до сути (опционально)';
+        lastRequestTime = Date.now();
     });
 });
 
@@ -260,7 +312,7 @@ micBtn.addEventListener('click', async function() {
                     var base64Audio = reader.result.split(',')[1];
                     
                     try {
-                        var response = await fetch(API_URL, {
+                        var response = await fetchWithRetry(API_URL, {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -300,6 +352,7 @@ micBtn.addEventListener('click', async function() {
                     } catch (e) {
                         statusEl.textContent = 'Ошибка: ' + e.message;
                     }
+                    lastRequestTime = Date.now();
                 };
                 reader.readAsDataURL(audioBlob);
             };
@@ -423,12 +476,23 @@ taskListEl.addEventListener('click', function(e) {
         var task = null;
         for (var i = 0; i < tasks.length; i++) { if (tasks[i].id === id) { task = tasks[i]; break; } }
         if (task) {
+            // Проверяем кэш
+            var cacheKey = 'task_' + id;
+            if (aiCache[cacheKey]) {
+                var resultDiv = document.createElement('div');
+                resultDiv.className = 'ai-result';
+                resultDiv.innerHTML = aiCache[cacheKey].replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+                btn.parentNode.parentNode.appendChild(resultDiv);
+                return;
+            }
+            
             btn.disabled = true;
             btn.textContent = 'Ищу в Google...';
             
             var locationInfo = userLocation ? userLocation : '';
             var searchQuery = task.text + (locationInfo ? ' ' + locationInfo : '');
             
+            // Шаг 1: Serper
             fetch(SERPER_URL, {
                 method: 'POST',
                 headers: { 
@@ -470,13 +534,15 @@ taskListEl.addEventListener('click', function(e) {
                     '6. Отвечай на русском языке, кратко и по делу.\n' +
                     '7. Формат: название сайта — ссылка — короткое описание (1 предложение).';
                 
-                return fetch(API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        contents: [{ parts: [{ text: prompt }] }],
-                        generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
-                    })
+                return waitForQueue().then(function() {
+                    return fetchWithRetry(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            contents: [{ parts: [{ text: prompt }] }],
+                            generationConfig: { temperature: 0.3, maxOutputTokens: 1024 }
+                        })
+                    });
                 });
             })
             .then(function(r) { 
@@ -486,6 +552,11 @@ taskListEl.addEventListener('click', function(e) {
             .then(function(data) {
                 if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
                     var result = data.candidates[0].content.parts[0].text.trim();
+                    
+                    // Сохраняем в кэш
+                    aiCache[cacheKey] = result;
+                    localStorage.setItem('aiCache', JSON.stringify(aiCache));
+                    
                     var resultDiv = document.createElement('div');
                     resultDiv.className = 'ai-result';
                     resultDiv.innerHTML = result.replace(/\n/g, '<br>').replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
@@ -495,11 +566,12 @@ taskListEl.addEventListener('click', function(e) {
                 }
             })
             .catch(function(e) {
-                alert('Ошибка: ' + e.message);
+                alert('Ошибка: ' + e.message + '. Попробуйте через минуту.');
             })
             .finally(function() {
                 btn.disabled = false;
                 btn.textContent = 'ИИ-помощь';
+                lastRequestTime = Date.now();
             });
         }
     }
