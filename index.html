@@ -6,21 +6,20 @@
     <title>Мои Задачи</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        body { font-family: -apple-system, Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
         .container { max-width: 600px; margin: 0 auto; }
-        h1 { color: white; text-align: center; margin-bottom: 20px; }
+        h1 { color: white; text-align: center; margin-bottom: 25px; font-size: 28px; }
         
-        .mic-btn { width: 100%; padding: 20px; margin-bottom: 15px; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; cursor: pointer; background: white; color: #667eea; }
-        .mic-btn.recording { background: #ff4b4b; color: white; animation: pulse 1.5s infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.7; } }
+        .mic-btn { width: 100%; padding: 22px; margin-bottom: 12px; border: none; border-radius: 15px; font-size: 20px; font-weight: bold; cursor: pointer; background: white; color: #667eea; transition: all 0.3s; }
+        .mic-btn.recording { background: #ff4b4b; color: white; }
         
-        .add-btn { width: 100%; padding: 20px; margin-bottom: 15px; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; cursor: pointer; background: #4CAF50; color: white; }
+        .add-btn { width: 100%; padding: 22px; margin-bottom: 15px; border: none; border-radius: 15px; font-size: 20px; font-weight: bold; cursor: pointer; background: #4CAF50; color: white; }
         
-        .status { text-align: center; color: white; margin-bottom: 15px; min-height: 20px; font-size: 14px; }
+        .status { text-align: center; color: white; margin-bottom: 20px; min-height: 24px; font-size: 16px; font-weight: 500; }
         
-        .task-item { background: white; padding: 15px; margin-bottom: 10px; border-radius: 10px; }
-        .task-text { font-size: 16px; margin-bottom: 10px; word-break: break-word; }
-        .task-meta { font-size: 12px; color: #888; margin-bottom: 10px; }
+        .task-item { background: white; padding: 16px; margin-bottom: 12px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .task-text { font-size: 17px; margin-bottom: 8px; line-height: 1.4; word-break: break-word; }
+        .task-meta { font-size: 13px; color: #666; margin-bottom: 12px; }
         .task-actions { display: flex; gap: 8px; flex-wrap: wrap; }
         .task-btn { padding: 8px 14px; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; cursor: pointer; }
         .btn-edit { background: #2196F3; color: white; }
@@ -33,14 +32,14 @@
         .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
         .modal.active { display: flex; }
         .modal-content { background: white; border-radius: 15px; padding: 25px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; }
-        .modal-content h2 { margin-bottom: 20px; }
+        .modal-content h2 { margin-bottom: 20px; color: #333; }
         .form-group { margin-bottom: 15px; }
-        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+        .form-group label { display: block; margin-bottom: 6px; font-weight: bold; color: #333; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; font-family: inherit; }
         .btn-row { display: flex; gap: 10px; margin-top: 20px; }
-        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .btn { flex: 1; padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
         .btn-save { background: #4CAF50; color: white; }
-        .btn-cancel { background: #ddd; }
+        .btn-cancel { background: #ddd; color: #333; }
     </style>
 </head>
 <body>
@@ -78,10 +77,11 @@
     </div>
 
     <script>
+        // === Элементы DOM ===
         const micBtn = document.getElementById('micBtn');
         const addBtn = document.getElementById('addBtn');
-        const status = document.getElementById('status');
-        const taskList = document.getElementById('taskList');
+        const statusEl = document.getElementById('status');
+        const taskListEl = document.getElementById('taskList');
         const taskModal = document.getElementById('taskModal');
         const modalTitle = document.getElementById('modalTitle');
         const taskText = document.getElementById('taskText');
@@ -89,72 +89,297 @@
         const cancelBtn = document.getElementById('cancelBtn');
         const saveBtn = document.getElementById('saveBtn');
 
+        // === Состояние ===
         let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
         let editingTaskId = null;
         let isRecording = false;
-        let currentTranscript = '';
+        let finalTranscript = '';
 
-        // Запрос разрешения на уведомления
+        // === Разрешение на уведомления ===
         if ('Notification' in window && Notification.permission === 'default') {
             Notification.requestPermission();
         }
 
-        // Голосовое распознавание
+        // === Голосовое распознавание ===
         const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         let recognition = null;
+
         if (SpeechRecognition) {
             recognition = new SpeechRecognition();
             recognition.lang = 'ru-RU';
             recognition.interimResults = false;
-            recognition.continuous = true; // Важно: непрерывный режим
+            recognition.continuous = true;
 
-            recognition.addEventListener('result', function(e) {
-                // Собираем весь распознанный текст
-                let fullText = '';
-                for (let i = 0; i < e.results.length; i++) {
-                    fullText += e.results[i][0].transcript + ' ';
+            recognition.onresult = function(event) {
+                // Накапливаем весь распознанный текст
+                let text = '';
+                for (let i = 0; i < event.results.length; i++) {
+                    text += event.results[i][0].transcript + ' ';
                 }
-                currentTranscript = fullText.trim();
-                status.textContent = '🎤 Записано: ' + currentTranscript;
-            });
+                finalTranscript = text.trim();
+                // ВАЖНО: НЕ показываем промежуточный текст пользователю
+                // Только индикатор что запись идёт
+            };
 
-            recognition.addEventListener('end', function() {
-                // Если пользователь не нажал "Закончить", перезапускаем
+            recognition.onend = function() {
+                // Если пользователь ещё не нажал "Закончить" — перезапускаем
+                // (Chrome останавливает continuous через ~60 сек тишины)
                 if (isRecording) {
                     try { recognition.start(); } catch(e) {}
                 }
-            });
+            };
 
-            recognition.addEventListener('error', function(e) {
-                console.error('Ошибка распознавания:', e.error);
-                if (e.error !== 'no-speech' && e.error !== 'aborted') {
-                    status.textContent = 'Ошибка: ' + e.error;
+            recognition.onerror = function(event) {
+                console.log('Speech error:', event.error);
+                if (event.error === 'no-speech' || event.error === 'aborted') {
+                    return; // игнорируем
                 }
-            });
+                if (isRecording) {
+                    statusEl.textContent = '⚠️ Ошибка: ' + event.error + '. Попробуйте ещё раз.';
+                }
+            };
         } else {
             micBtn.disabled = true;
-            micBtn.textContent = '🎙️ Голос не поддерживается (используйте Chrome)';
+            micBtn.textContent = '🎙️ Голос не поддерживается (нужен Chrome)';
         }
 
-        // Кнопка микрофона - переключение запись/стоп
+        // === Кнопка микрофона ===
         micBtn.addEventListener('click', function() {
             if (!recognition) return;
 
             if (!isRecording) {
                 // НАЧАТЬ ЗАПИСЬ
-                currentTranscript = '';
+                finalTranscript = '';
                 isRecording = true;
-                micBtn.textContent = '️ Закончить запись';
+                micBtn.textContent = '⏹️ Закончить запись';
                 micBtn.classList.add('recording');
-                status.textContent = ' Говорите... Нажмите кнопку когда закончите';
+                statusEl.textContent = '🔴 Идёт запись... Говорите...';
                 try { recognition.start(); } catch(e) {}
             } else {
                 // ЗАКОНЧИТЬ ЗАПИСЬ
                 isRecording = false;
-                micBtn.textContent = '️ Начать запись';
+                micBtn.textContent = '🎙️ Начать запись';
                 micBtn.classList.remove('recording');
                 try { recognition.stop(); } catch(e) {}
 
-                if (currentTranscript) {
-                    status.textContent = '✓ Распознано: ' + currentTranscript;
-                    // Открываем модальное окно с
+                // Показываем результат только сейчас
+                if (finalTranscript) {
+                    statusEl.textContent = '✓ Распознано: ' + finalTranscript;
+                    taskText.value = finalTranscript;
+                    reminderPreset.value = '';
+                    editingTaskId = null;
+                    modalTitle.textContent = 'Новая задача (голос)';
+                    taskModal.classList.add('active');
+                    finalTranscript = '';
+                } else {
+                    statusEl.textContent = 'Ничего не распознано. Попробуйте ещё раз.';
+                }
+            }
+        });
+
+        // === Ручное добавление ===
+        addBtn.addEventListener('click', function() {
+            taskText.value = '';
+            reminderPreset.value = '';
+            editingTaskId = null;
+            modalTitle.textContent = 'Новая задача';
+            taskModal.classList.add('active');
+        });
+
+        // === Отмена ===
+        cancelBtn.addEventListener('click', function() {
+            taskModal.classList.remove('active');
+        });
+
+        // === Сохранение ===
+        saveBtn.addEventListener('click', function() {
+            const text = taskText.value.trim();
+            if (!text) {
+                alert('Введите текст задачи');
+                return;
+            }
+
+            let reminderDate = null;
+            const preset = reminderPreset.value;
+            const now = new Date();
+
+            if (preset === 'today') {
+                reminderDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0);
+            } else if (preset === 'tomorrow') {
+                reminderDate = new Date(now.getTime() + 24*60*60*1000);
+                reminderDate.setHours(9, 0, 0, 0);
+            } else if (preset === 'week') {
+                reminderDate = new Date(now.getTime() + 7*24*60*60*1000);
+            } else if (preset === 'month') {
+                reminderDate = new Date(now.getTime() + 30*24*60*60*1000);
+            } else if (preset === 'year') {
+                reminderDate = new Date(now.getTime() + 365*24*60*60*1000);
+            }
+
+            if (editingTaskId !== null) {
+                // Редактирование
+                for (let i = 0; i < tasks.length; i++) {
+                    if (tasks[i].id === editingTaskId) {
+                        tasks[i].text = text;
+                        tasks[i].reminderDate = reminderDate ? reminderDate.getTime() : null;
+                        break;
+                    }
+                }
+                editingTaskId = null;
+            } else {
+                // Новая задача
+                tasks.push({
+                    id: Date.now(),
+                    text: text,
+                    reminderDate: reminderDate ? reminderDate.getTime() : null,
+                    done: false,
+                    notified: false
+                });
+            }
+
+            localStorage.setItem('tasks', JSON.stringify(tasks));
+            taskModal.classList.remove('active');
+            renderTasks();
+        });
+
+        // === Делегирование событий для кнопок задач ===
+        taskListEl.addEventListener('click', function(event) {
+            const btn = event.target.closest('.task-btn');
+            if (!btn) return;
+
+            const id = parseInt(btn.getAttribute('data-id'));
+            const action = btn.getAttribute('data-action');
+
+            if (action === 'delete') {
+                if (confirm('Удалить задачу?')) {
+                    tasks = tasks.filter(t => t.id !== id);
+                    localStorage.setItem('tasks', JSON.stringify(tasks));
+                    renderTasks();
+                }
+            } else if (action === 'done') {
+                for (let i = 0; i < tasks.length; i++) {
+                    if (tasks[i].id === id) {
+                        tasks[i].done = !tasks[i].done;
+                        break;
+                    }
+                }
+                localStorage.setItem('tasks', JSON.stringify(tasks));
+                renderTasks();
+            } else if (action === 'edit') {
+                const task = tasks.find(t => t.id === id);
+                if (task) {
+                    editingTaskId = id;
+                    taskText.value = task.text;
+                    reminderPreset.value = '';
+                    modalTitle.textContent = 'Редактировать задачу';
+                    taskModal.classList.add('active');
+                }
+            }
+        });
+
+        // === Отрисовка задач ===
+        function renderTasks() {
+            if (tasks.length === 0) {
+                taskListEl.innerHTML = '<p class="empty">Нет задач. Добавьте первую!</p>';
+                return;
+            }
+
+            let html = '';
+            for (let i = 0; i < tasks.length; i++) {
+                const task = tasks[i];
+                const doneClass = task.done ? ' task-done' : '';
+
+                let metaText = '';
+                if (task.reminderDate) {
+                    const d = new Date(task.reminderDate);
+                    const now = new Date();
+                    const isOverdue = d < now && !task.done;
+                    metaText = (isOverdue ? '⚠️ Просрочено: ' : '📅 Напомнить: ') + formatDate(d);
+                }
+
+                const doneBtnText = task.done ? '↩️ Вернуть' : '✓ Выполнено';
+
+                html += '<div class="task-item' + doneClass + '">';
+                html += '<div class="task-text">' + escapeHtml(task.text) + '</div>';
+                if (metaText) {
+                    html += '<div class="task-meta">' + metaText + '</div>';
+                }
+                html += '<div class="task-actions">';
+                html += '<button class="task-btn btn-done" data-action="done" data-id="' + task.id + '">' + doneBtnText + '</button>';
+                html += '<button class="task-btn btn-edit" data-action="edit" data-id="' + task.id + '">✏️ Изменить</button>';
+                html += '<button class="task-btn btn-delete" data-action="delete" data-id="' + task.id + '">✕ Удалить</button>';
+                html += '</div>';
+                html += '</div>';
+            }
+
+            taskListEl.innerHTML = html;
+        }
+
+        // === Форматирование даты ===
+        function formatDate(date) {
+            const now = new Date();
+            const diff = date.getTime() - now.getTime();
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const time = date.getHours() + ':' + String(date.getMinutes()).padStart(2, '0');
+            if (days === 0) return 'Сегодня в ' + time;
+            if (days === 1) return 'Завтра в ' + time;
+            if (days > 1 && days < 7) return 'Через ' + days + ' дн. в ' + time;
+            return date.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ' в ' + time;
+        }
+
+        // === Экранирование HTML ===
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // === Проверка напоминаний ===
+        function checkReminders() {
+            const now = Date.now();
+            let changed = false;
+            for (let i = 0; i < tasks.length; i++) {
+                const task = tasks[i];
+                if (task.reminderDate && task.reminderDate <= now && !task.done && !task.notified) {
+                    showNotification(task);
+                    task.notified = true;
+                    changed = true;
+                }
+            }
+            if (changed) {
+                localStorage.setItem('tasks', JSON.stringify(tasks));
+            }
+        }
+
+        function showNotification(task) {
+            // Звук
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 800;
+                gain.gain.setValueAtTime(0.3, ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
+                osc.start(ctx.currentTime);
+                osc.stop(ctx.currentTime + 0.5);
+            } catch(e) {}
+
+            // Уведомление
+            if ('Notification' in window && Notification.permission === 'granted') {
+                new Notification('⏰ Напоминание', { body: task.text, requireInteraction: true });
+            }
+
+            setTimeout(function() {
+                alert(' Напоминание!\n\n' + task.text);
+            }, 200);
+        }
+
+        setInterval(checkReminders, 30000);
+
+        // === Запуск ===
+        renderTasks();
+    </script>
+</body>
+</html>
