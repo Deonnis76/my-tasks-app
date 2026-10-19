@@ -86,8 +86,7 @@ var _p1 = 'AQ.Ab8RN6J20JFrZkONjLdSsHz_';
 var _p2 = 'zL6RzXy0WQRnghJgq0WT0h-';
 var _p3 = '56w';
 var API_KEY = _p1 + _p2 + _p3;
-// Используем стабильную модель gemini-pro
-var API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=' + API_KEY;
+var API_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.5-flash:generateContent?key=' + API_KEY;
 
 var micBtn = document.getElementById('micBtn');
 var addBtn = document.getElementById('addBtn');
@@ -176,24 +175,30 @@ sumBtn.addEventListener('click', function() {
     sumBtn.textContent = 'Сжимаю...';
     statusEl.textContent = 'ИИ анализирует...';
     
+    var prompt = 'Ты помощник для составления кратких задач из голосовых заметок. Проанализируй текст и выдели из него КОНКРЕТНУЮ ЗАДАЧУ — что именно нужно сделать. Сохрани все важные детали (сроки, суммы, названия). Убери только воду, сомнения, рассуждения. Верни 1-3 коротких предложения. Текст: ' + text;
+    
     fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            contents: [{ parts: [{ text: 'Сократи текст до 1-2 предложений, сохранив основную задачу и все важные детали (сроки, суммы, названия). Убери только воду и рассуждения. Текст: ' + text }] }]
+            contents: [{ parts: [{ text: prompt }] }],
+            generationConfig: { temperature: 0.5, maxOutputTokens: 512 }
         })
     })
-    .then(function(r) { return r.json(); })
+    .then(function(r) { 
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json(); 
+    })
     .then(function(data) {
         if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
             mText.value = data.candidates[0].content.parts[0].text.trim();
             statusEl.textContent = 'Текст сжат!';
         } else {
-            statusEl.textContent = 'Ошибка: ' + (data.error ? data.error.message : JSON.stringify(data).substring(0, 200));
+            throw new Error('Пустой ответ');
         }
     })
     .catch(function(e) {
-        statusEl.textContent = 'Ошибка: ' + e.message;
+        statusEl.textContent = 'Ошибка сжатия: ' + e.message;
     })
     .finally(function() {
         sumBtn.disabled = false;
@@ -236,7 +241,8 @@ micBtn.addEventListener('click', async function() {
                                         { text: 'Расшифруй эту аудиозапись речи на русском языке. Верни только текст, без пояснений.' },
                                         { inline_data: { mime_type: 'audio/webm', data: base64Audio } }
                                     ]
-                                }]
+                                }],
+                                generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
                             })
                         });
                         
