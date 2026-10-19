@@ -22,6 +22,9 @@ button { width: 100%; padding: 20px; margin: 10px 0; border: none; border-radius
 .done-btn { background: #4CAF50; color: white; }
 .edit-btn { background: #2196F3; color: white; }
 .del-btn { background: #ff4b4b; color: white; }
+.ai-btn { background: #9C27B0; color: white; }
+.ai-result { background: #f3e5f5; padding: 12px; border-radius: 8px; margin-top: 10px; font-size: 14px; color: #6a1b9a; line-height: 1.5; }
+.ai-result a { color: #6a1b9a; text-decoration: underline; word-break: break-all; }
 .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
 .modal.on { display: flex; }
 .modal-box { background: white; border-radius: 15px; padding: 25px; max-width: 500px; width: 100%; }
@@ -395,6 +398,55 @@ taskListEl.addEventListener('click', function(e) {
             mTitle.textContent = 'Редактировать';
             modal.classList.add('on');
         }
+    } else if (act === 'ai') {
+        var task = null;
+        for (var i = 0; i < tasks.length; i++) { if (tasks[i].id === id) { task = tasks[i]; break; } }
+        if (task) {
+            btn.disabled = true;
+            btn.textContent = 'Анализирую...';
+            
+            var prompt = 'Ты умный помощник. Проанализируй задачу пользователя и реши, нужна ли помощь с поиском информации или ссылок. ' +
+                'Если задача связана с поиском (билеты, отели, рестораны, магазины, услуги, тренажёрные залы, курсы и т.п.) — ' +
+                'дай 2-3 конкретных совета и создай готовые ссылки для поиска. ' +
+                'Используй реальные URL: для билетов — https://www.google.com/travel/flights?q=ОТКУДА+КУДА+ДАТА, ' +
+                'для отелей — https://www.google.com/travel/hotels?q=ГОРОД+ДАТА, ' +
+                'для поиска мест рядом — https://www.google.com/maps/search/ЧТО+ИЩЕМ, ' +
+                'для товаров — https://www.google.com/search?q=ТОВАР+купить. ' +
+                'Если задача простая и не требует поиска (купить хлеб, позвонить, сделать уборку) — просто напиши короткое "Задача ясна, дополнительных действий не требуется" или дай мини-совет. ' +
+                'Отвечай кратко и по делу на русском языке. ' +
+                'Задача пользователя: ' + task.text;
+            
+            fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    contents: [{ parts: [{ text: prompt }] }],
+                    generationConfig: { temperature: 0.5, maxOutputTokens: 512 }
+                })
+            })
+            .then(function(r) { 
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                return r.json(); 
+            })
+            .then(function(data) {
+                if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
+                    var result = data.candidates[0].content.parts[0].text.trim();
+                    var resultDiv = document.createElement('div');
+                    resultDiv.className = 'ai-result';
+                    resultDiv.innerHTML = result.replace(/\n/g, '<br>');
+                    btn.parentNode.parentNode.appendChild(resultDiv);
+                } else {
+                    throw new Error('Пустой ответ');
+                }
+            })
+            .catch(function(e) {
+                alert('Ошибка ИИ: ' + e.message);
+            })
+            .finally(function() {
+                btn.disabled = false;
+                btn.textContent = 'ИИ-помощь';
+            });
+        }
     }
 });
 
@@ -432,6 +484,7 @@ function renderTasks() {
         html += '<button class="done-btn" data-act="done" data-id="' + t.id + '">' + btnText + '</button>';
         html += '<button class="edit-btn" data-act="edit" data-id="' + t.id + '">Изменить</button>';
         html += '<button class="del-btn" data-act="del" data-id="' + t.id + '">Удалить</button>';
+        html += '<button class="ai-btn" data-act="ai" data-id="' + t.id + '">ИИ-помощь</button>';
         html += '</div></div>';
     }
     taskListEl.innerHTML = html;
