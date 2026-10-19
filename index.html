@@ -71,7 +71,11 @@ button { width: 100%; padding: 20px; margin: 10px 0; border: none; border-radius
 </select>
 <div id="mDateGroup" class="hidden">
 <label>Дата и время:</label>
-<input type="datetime-local" id="mDate">
+<div style="display: flex; gap: 8px;">
+    <input type="datetime-local" id="mDate" style="flex: 1; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px;">
+    <button type="button" id="voiceDateBtn" style="width: auto; padding: 10px; font-size: 18px; background: #2196F3; color: white; border: none; border-radius: 8px; cursor: pointer;" title="Сказать дату голосом">🎤</button>
+</div>
+<div id="voiceDateStatus" style="font-size: 12px; color: #1976D2; margin-top: 4px; min-height: 18px;"></div>
 </div>
 <div id="mDetected" class="detected hidden"></div>
 <div class="btn-row">
@@ -462,6 +466,60 @@ function checkReminders() {
 
 setInterval(checkReminders, 30000);
 renderTasks();
+
+var voiceDateBtn = document.getElementById('voiceDateBtn');
+var voiceDateStatus = document.getElementById('voiceDateStatus');
+
+voiceDateBtn.addEventListener('click', function() {
+    var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+        voiceDateStatus.textContent = '❌ Браузер не поддерживает голосовой ввод.';
+        return;
+    }
+    var recognition = new SpeechRecognition();
+    recognition.lang = 'ru-RU';
+    recognition.interimResults = false;
+    
+    voiceDateStatus.textContent = '🎙️ Говорите дату (например: "завтра в 10 утра")...';
+    recognition.start();
+
+    recognition.onresult = function(event) {
+        var transcript = event.results[0][0].transcript;
+        voiceDateStatus.textContent = 'Распознано: "' + transcript + '". Обработка...';
+        
+        var now = new Date();
+        var t = transcript.toLowerCase();
+        var h = 9, m = 0;
+        
+        var timeMatch = t.match(/в\s+(\d{1,2})(?::(\d{2}))?\s*(утра|вечера|дня|ночи)?/);
+        if (timeMatch) {
+            h = parseInt(timeMatch[1]);
+            m = timeMatch[2] ? parseInt(timeMatch[2]) : 0;
+            if (timeMatch[3] === 'вечера' && h < 12) h += 12;
+            if (timeMatch[3] === 'ночи' && h < 12) h += 12;
+            if (timeMatch[3] === 'утра' && h === 12) h = 0;
+        }
+
+        var targetDate = new Date(now);
+        if (t.indexOf('завтра') >= 0) targetDate.setDate(now.getDate() + 1);
+        else if (t.indexOf('послезавтра') >= 0) targetDate.setDate(now.getDate() + 2);
+        
+        targetDate.setHours(h, m, 0, 0);
+
+        var pad = function(n) { return n.toString().padStart(2, '0'); };
+        var dateStr = targetDate.getFullYear() + '-' + pad(targetDate.getMonth() + 1) + '-' + pad(targetDate.getDate()) + 'T' + pad(targetDate.getHours()) + ':' + pad(targetDate.getMinutes());
+        
+        mDate.value = dateStr;
+        mPreset.value = 'custom';
+        mDateGroup.classList.remove('hidden');
+        voiceDateStatus.textContent = '✅ Дата установлена: ' + transcript;
+        setTimeout(function() { voiceDateStatus.textContent = ''; }, 3000);
+    };
+
+    recognition.onerror = function(event) {
+        voiceDateStatus.textContent = '❌ Ошибка: ' + event.error;
+    };
+});
 </script>
 </body>
 </html>
