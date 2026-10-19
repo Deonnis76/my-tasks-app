@@ -3,82 +3,32 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Мои Задачи</title>
+<title>Поиск рабочих моделей</title>
 <style>
-body { font-family: Arial; background: linear-gradient(135deg, #667eea, #764ba2); min-height: 100vh; padding: 20px; margin: 0; }
-.container { max-width: 600px; margin: 0 auto; }
-h1 { color: white; text-align: center; }
-button { width: 100%; padding: 20px; margin: 10px 0; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; cursor: pointer; }
-.mic { background: white; color: #667eea; }
-.mic.rec { background: #ff4b4b; color: white; }
-.add { background: #4CAF50; color: white; }
-.status { text-align: center; color: white; margin: 15px 0; min-height: 20px; }
-.task { background: white; padding: 15px; margin: 10px 0; border-radius: 10px; }
-.task.done .txt { text-decoration: line-through; color: #999; }
-.txt { font-size: 16px; margin-bottom: 8px; }
-.meta { font-size: 13px; color: #666; margin-bottom: 10px; }
-.actions { display: flex; gap: 8px; flex-wrap: wrap; }
-.actions button { width: auto; padding: 8px 14px; font-size: 14px; margin: 0; }
-.done-btn { background: #4CAF50; color: white; }
-.edit-btn { background: #2196F3; color: white; }
-.del-btn { background: #ff4b4b; color: white; }
-.modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
-.modal.on { display: flex; }
-.modal-box { background: white; border-radius: 15px; padding: 25px; max-width: 500px; width: 100%; }
-.modal-box h2 { margin-bottom: 15px; }
-.modal-box label { display: block; margin: 10px 0 5px; font-weight: bold; }
-.modal-box input, .modal-box select, .modal-box textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; box-sizing: border-box; }
-.modal-box textarea { min-height: 80px; font-family: Arial; }
-.btn-row { display: flex; gap: 10px; margin-top: 15px; }
-.btn-row button { flex: 1; padding: 12px; }
-.save-btn { background: #4CAF50; color: white; }
-.cancel-btn { background: #ddd; color: #333; }
-.sum-btn { background: #9C27B0; color: white; margin-top: 10px; width: 100%; padding: 12px; }
-.sum-btn:disabled { background: #ccc; }
-.note { font-size: 12px; color: #888; margin-top: 8px; font-style: italic; }
-.detected { background: #e3f2fd; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 14px; color: #1976D2; }
-.hidden { display: none; }
-.empty { text-align: center; color: white; padding: 40px; font-size: 18px; }
-.timer { text-align: center; color: #ff4b4b; font-size: 24px; font-weight: bold; margin: 10px 0; }
+body { font-family: Arial; background: #1a1a2e; color: white; padding: 30px; max-width: 800px; margin: 0 auto; }
+h1 { color: #667eea; }
+.box { background: #16213e; padding: 20px; border-radius: 10px; margin: 15px 0; }
+button { background: #667eea; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-size: 16px; cursor: pointer; margin: 5px; }
+pre { background: #0f3460; padding: 15px; border-radius: 5px; overflow-x: auto; font-size: 13px; white-space: pre-wrap; }
+.ok { color: #4CAF50; }
+.err { color: #ff4b4b; }
+.model-item { background: #0f3460; padding: 10px; margin: 5px 0; border-radius: 5px; font-family: monospace; }
 </style>
 </head>
 <body>
-<div class="container">
-<h1>Мои Задачи</h1>
-<button class="mic" id="micBtn">Начать запись</button>
-<div id="timer" class="timer hidden">00:00</div>
-<button class="add" id="addBtn">Добавить задачу вручную</button>
-<p class="status" id="status"></p>
-<div id="taskList"></div>
+<h1>🔍 Поиск рабочих моделей Gemini</h1>
+
+<div class="box">
+<h2>Шаг 1: Получаю список всех доступных моделей</h2>
+<button onclick="listModels()">Получить список моделей</button>
+<div id="modelsResult"></div>
 </div>
 
-<div class="modal" id="modal">
-<div class="modal-box">
-<h2 id="mTitle">Новая задача</h2>
-<label>Описание:</label>
-<textarea id="mText"></textarea>
-<button class="sum-btn" id="sumBtn">Сжать до сути (опционально)</button>
-<p class="note">При нажатии текст отправляется в Google Gemini</p>
-<label>Когда напомнить:</label>
-<select id="mPreset">
-<option value="">Без напоминания</option>
-<option value="today">Сегодня (20:00)</option>
-<option value="tomorrow">Завтра (09:00)</option>
-<option value="week">Через неделю</option>
-<option value="month">Через месяц</option>
-<option value="year">Через год</option>
-<option value="custom">Выбрать дату и время</option>
-</select>
-<div id="mDateGroup" class="hidden">
-<label>Дата и время:</label>
-<input type="datetime-local" id="mDate">
-</div>
-<div id="mDetected" class="detected hidden"></div>
-<div class="btn-row">
-<button class="cancel-btn" id="mCancel">Отмена</button>
-<button class="save-btn" id="mSave">Сохранить</button>
-</div>
-</div>
+<div class="box">
+<h2>Шаг 2: Тестирование моделей</h2>
+<p>Нажмите чтобы проверить каждую модель:</p>
+<div id="testButtons"></div>
+<div id="testResult"></div>
 </div>
 
 <script>
@@ -86,383 +36,62 @@ var _p1 = 'AQ.Ab8RN6J20JFrZkONjLdSsHz_';
 var _p2 = 'zL6RzXy0WQRnghJgq0WT0h-';
 var _p3 = '56w';
 var API_KEY = _p1 + _p2 + _p3;
-var VOICE_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-3.8-flash:generateContent?key=' + API_KEY;
-var SUM_URL = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent?key=' + API_KEY;
 
-var micBtn = document.getElementById('micBtn');
-var addBtn = document.getElementById('addBtn');
-var statusEl = document.getElementById('status');
-var taskListEl = document.getElementById('taskList');
-var modal = document.getElementById('modal');
-var mTitle = document.getElementById('mTitle');
-var mText = document.getElementById('mText');
-var mPreset = document.getElementById('mPreset');
-var mDateGroup = document.getElementById('mDateGroup');
-var mDate = document.getElementById('mDate');
-var mDetected = document.getElementById('mDetected');
-var mCancel = document.getElementById('mCancel');
-var mSave = document.getElementById('mSave');
-var sumBtn = document.getElementById('sumBtn');
-var timerEl = document.getElementById('timer');
-
-var tasks = JSON.parse(localStorage.getItem('tasks') || '[]');
-var editId = null;
-var recording = false;
-var mediaRecorder = null;
-var audioChunks = [];
-var timerInterval = null;
-var seconds = 0;
-
-if ('Notification' in window && Notification.permission === 'default') {
-    Notification.requestPermission();
-}
-
-function parseDate(text) {
-    var now = new Date();
-    var t = text.toLowerCase();
-    var h = 9;
-    var hm = t.match(/в\s+(\d{1,2})\s*(утра|вечера|дня)?/);
-    if (hm) {
-        h = parseInt(hm[1]);
-        if (hm[2] === 'вечера' && h < 12) h += 12;
-    }
-    if (t.indexOf('завтра') >= 0) {
-        var d = new Date(now.getTime() + 86400000);
-        d.setHours(h, 0, 0, 0);
-        return { date: d, text: 'Завтра в ' + h + ':00' };
-    }
-    if (t.indexOf('сегодня') >= 0) {
-        var d2 = new Date(now);
-        d2.setHours(h < 12 ? h + 12 : h, 0, 0, 0);
-        return { date: d2, text: 'Сегодня в ' + (h < 12 ? h + 12 : h) + ':00' };
-    }
-    if (t.indexOf('через неделю') >= 0) {
-        return { date: new Date(now.getTime() + 7 * 86400000), text: 'Через неделю' };
-    }
-    if (t.indexOf('через месяц') >= 0) {
-        return { date: new Date(now.getTime() + 30 * 86400000), text: 'Через месяц' };
-    }
-    if (t.indexOf('через год') >= 0) {
-        return { date: new Date(now.getTime() + 365 * 86400000), text: 'Через год' };
-    }
-    var days = ['воскресенье','понедельник','вторник','среду','четверг','пятницу','субботу'];
-    for (var i = 0; i < days.length; i++) {
-        if (t.indexOf(days[i]) >= 0) {
-            var cur = now.getDay();
-            var diff = i - cur;
-            if (diff <= 0) diff += 7;
-            var d6 = new Date(now.getTime() + diff * 86400000);
-            d6.setHours(h, 0, 0, 0);
-            return { date: d6, text: 'В ' + days[i] + ' в ' + h + ':00' };
-        }
-    }
-    return null;
-}
-
-function formatTime(s) {
-    var m = Math.floor(s / 60);
-    var sec = s % 60;
-    return (m < 10 ? '0' : '') + m + ':' + (sec < 10 ? '0' : '') + sec;
-}
-
-mPreset.addEventListener('change', function() {
-    mDateGroup.classList.toggle('hidden', this.value !== 'custom');
-});
-
-sumBtn.addEventListener('click', function() {
-    var text = mText.value.trim();
-    if (!text) { alert('Введите текст'); return; }
-    sumBtn.disabled = true;
-    sumBtn.textContent = 'Сжимаю...';
-    statusEl.textContent = 'ИИ анализирует...';
+function listModels() {
+    var result = document.getElementById('modelsResult');
+    result.innerHTML = '<p>Загружаю...</p>';
     
-    var prompt = 'Ты помощник для составления кратких задач из голосовых заметок. Проанализируй текст и выдели из него КОНКРЕТНУЮ ЗАДАЧУ — что именно нужно сделать. Сохрани все важные детали (сроки, суммы, названия). Убери только воду, сомнения, рассуждения. Верни 1-3 коротких предложения. Текст: ' + text;
-    
-    fetch(SUM_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { temperature: 0.5, maxOutputTokens: 512 }
-        })
-    })
+    fetch('https://generativelanguage.googleapis.com/v1/models?key=' + API_KEY)
     .then(function(r) { 
-        if (!r.ok) throw new Error('HTTP ' + r.status);
+        result.innerHTML += '<p>HTTP: ' + r.status + '</p>';
         return r.json(); 
     })
     .then(function(data) {
-        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-            mText.value = data.candidates[0].content.parts[0].text.trim();
-            statusEl.textContent = 'Текст сжат!';
+        if (data.models) {
+            result.innerHTML += '<p class="ok">Найдено моделей: ' + data.models.length + '</p>';
+            var flash = data.models.filter(function(m) { 
+                return m.name.indexOf('flash') >= 0 || m.name.indexOf('gemini') >= 0; 
+            });
+            result.innerHTML += '<p>Модели с "flash" или "gemini" в названии:</p>';
+            flash.forEach(function(m) {
+                result.innerHTML += '<div class="model-item">' + m.name + ' <button onclick="testModel(\'' + m.name + '\')">Тест</button></div>';
+            });
         } else {
-            throw new Error('Пустой ответ');
+            result.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
         }
     })
     .catch(function(e) {
-        statusEl.textContent = 'Ошибка сжатия: ' + e.message;
-    })
-    .finally(function() {
-        sumBtn.disabled = false;
-        sumBtn.textContent = 'Сжать до сути (опционально)';
+        result.innerHTML += '<p class="err">Ошибка: ' + e.message + '</p>';
     });
-});
-
-micBtn.addEventListener('click', async function() {
-    if (!recording) {
-        try {
-            var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            mediaRecorder = new MediaRecorder(stream, { mimeType: 'audio/webm;codecs=opus' });
-            audioChunks = [];
-            
-            mediaRecorder.ondataavailable = function(e) {
-                if (e.data.size > 0) audioChunks.push(e.data);
-            };
-            
-            mediaRecorder.onstop = async function() {
-                var audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-                
-                if (audioBlob.size < 1000) {
-                    statusEl.textContent = 'Аудио слишком короткое. Говорите дольше.';
-                    return;
-                }
-                
-                statusEl.textContent = 'Распознаю речь (' + Math.round(audioBlob.size / 1024) + ' KB)...';
-                
-                var reader = new FileReader();
-                reader.onloadend = async function() {
-                    var base64Audio = reader.result.split(',')[1];
-                    
-                    try {
-                        var response = await fetch(VOICE_URL, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({
-                                contents: [{
-                                    parts: [
-                                        { text: 'Расшифруй эту аудиозапись речи на русском языке. Верни только текст, без пояснений.' },
-                                        { inline_data: { mime_type: 'audio/webm', data: base64Audio } }
-                                    ]
-                                }],
-                                generationConfig: { temperature: 0.3, maxOutputTokens: 2048 }
-                            })
-                        });
-                        
-                        var data = await response.json();
-                        
-                        if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) {
-                            var text = data.candidates[0].content.parts[0].text.trim();
-                            statusEl.textContent = 'Распознано: ' + text;
-                            mText.value = text;
-                            
-                            var dr = parseDate(text);
-                            if (dr) {
-                                mDetected.textContent = 'Обнаружена дата: ' + dr.text;
-                                mDetected.classList.remove('hidden');
-                            } else {
-                                mDetected.classList.add('hidden');
-                            }
-                            
-                            mPreset.value = '';
-                            mDateGroup.classList.add('hidden');
-                            editId = null;
-                            mTitle.textContent = 'Новая задача (голос)';
-                            modal.classList.add('on');
-                        } else {
-                            statusEl.textContent = 'Ошибка: ' + (data.error ? data.error.message : 'не распознано');
-                        }
-                    } catch (e) {
-                        statusEl.textContent = 'Ошибка: ' + e.message;
-                    }
-                };
-                reader.readAsDataURL(audioBlob);
-            };
-            
-            mediaRecorder.start();
-            recording = true;
-            seconds = 0;
-            micBtn.textContent = 'Закончить запись';
-            micBtn.classList.add('rec');
-            timerEl.classList.remove('hidden');
-            statusEl.textContent = 'Говорите... (минимум 3 секунды)';
-            
-            timerInterval = setInterval(function() {
-                seconds++;
-                timerEl.textContent = formatTime(seconds);
-            }, 1000);
-            
-        } catch (e) {
-            statusEl.textContent = 'Ошибка микрофона: ' + e.message;
-        }
-    } else {
-        if (seconds < 3) {
-            statusEl.textContent = 'Запись слишком короткая. Говорите минимум 3 секунды.';
-            return;
-        }
-        
-        mediaRecorder.stop();
-        mediaRecorder.stream.getTracks().forEach(function(t) { t.stop(); });
-        recording = false;
-        micBtn.textContent = 'Начать запись';
-        micBtn.classList.remove('rec');
-        timerEl.classList.add('hidden');
-        clearInterval(timerInterval);
-    }
-});
-
-addBtn.addEventListener('click', function() {
-    mText.value = '';
-    mPreset.value = '';
-    mDateGroup.classList.add('hidden');
-    mDate.value = '';
-    mDetected.classList.add('hidden');
-    editId = null;
-    mTitle.textContent = 'Новая задача';
-    modal.classList.add('on');
-});
-
-mCancel.addEventListener('click', function() {
-    modal.classList.remove('on');
-});
-
-mSave.addEventListener('click', function() {
-    var text = mText.value.trim();
-    if (!text) { alert('Введите текст'); return; }
-    var rDate = null;
-    var preset = mPreset.value;
-    var now = new Date();
-    if (preset === 'today') {
-        rDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0);
-    } else if (preset === 'tomorrow') {
-        rDate = new Date(now.getTime() + 86400000);
-        rDate.setHours(9, 0, 0, 0);
-    } else if (preset === 'week') {
-        rDate = new Date(now.getTime() + 7 * 86400000);
-    } else if (preset === 'month') {
-        rDate = new Date(now.getTime() + 30 * 86400000);
-    } else if (preset === 'year') {
-        rDate = new Date(now.getTime() + 365 * 86400000);
-    } else if (preset === 'custom' && mDate.value) {
-        rDate = new Date(mDate.value);
-    }
-    if (editId !== null) {
-        for (var i = 0; i < tasks.length; i++) {
-            if (tasks[i].id === editId) {
-                tasks[i].text = text;
-                tasks[i].reminderDate = rDate ? rDate.getTime() : null;
-                break;
-            }
-        }
-        editId = null;
-    } else {
-        tasks.push({ id: Date.now(), text: text, reminderDate: rDate ? rDate.getTime() : null, done: false, notified: false });
-    }
-    localStorage.setItem('tasks', JSON.stringify(tasks));
-    modal.classList.remove('on');
-    mDetected.classList.add('hidden');
-    renderTasks();
-});
-
-taskListEl.addEventListener('click', function(e) {
-    var btn = e.target.closest('button');
-    if (!btn) return;
-    var id = parseInt(btn.getAttribute('data-id'));
-    var act = btn.getAttribute('data-act');
-    if (act === 'del') {
-        if (confirm('Удалить?')) {
-            tasks = tasks.filter(function(t) { return t.id !== id; });
-            localStorage.setItem('tasks', JSON.stringify(tasks));
-            renderTasks();
-        }
-    } else if (act === 'done') {
-        for (var i = 0; i < tasks.length; i++) {
-            if (tasks[i].id === id) { tasks[i].done = !tasks[i].done; break; }
-        }
-        localStorage.setItem('tasks', JSON.stringify(tasks));
-        renderTasks();
-    } else if (act === 'edit') {
-        var task = null;
-        for (var i = 0; i < tasks.length; i++) { if (tasks[i].id === id) { task = tasks[i]; break; } }
-        if (task) {
-            editId = id;
-            mText.value = task.text;
-            mPreset.value = '';
-            mDateGroup.classList.add('hidden');
-            mDate.value = '';
-            mDetected.classList.add('hidden');
-            mTitle.textContent = 'Редактировать';
-            modal.classList.add('on');
-        }
-    }
-});
-
-function fmtDate(d) {
-    var now = new Date();
-    var diff = d.getTime() - now.getTime();
-    var days = Math.floor(diff / 86400000);
-    var time = d.getHours() + ':' + (d.getMinutes() < 10 ? '0' : '') + d.getMinutes();
-    if (days === 0) return 'Сегодня в ' + time;
-    if (days === 1) return 'Завтра в ' + time;
-    if (days > 1 && days < 7) return 'Через ' + days + ' дн. в ' + time;
-    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) + ' в ' + time;
 }
 
-function renderTasks() {
-    if (tasks.length === 0) {
-        taskListEl.innerHTML = '<p class="empty">Нет задач</p>';
-        return;
-    }
-    var html = '';
-    for (var i = 0; i < tasks.length; i++) {
-        var t = tasks[i];
-        var cls = t.done ? 'task done' : 'task';
-        var meta = '';
-        if (t.reminderDate) {
-            var d = new Date(t.reminderDate);
-            var over = d < new Date() && !t.done;
-            meta = '<div class="meta">' + (over ? 'Просрочено: ' : 'Напомнить: ') + fmtDate(d) + '</div>';
+function testModel(modelName) {
+    var result = document.getElementById('testResult');
+    result.innerHTML += '<p>Тестирую ' + modelName + '...</p>';
+    
+    fetch('https://generativelanguage.googleapis.com/v1/' + modelName + ':generateContent?key=' + API_KEY, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            contents: [{ parts: [{ text: 'Напиши одно слово: привет' }] }]
+        })
+    })
+    .then(function(r) { 
+        result.innerHTML += '<p>HTTP: ' + r.status + '</p>';
+        return r.json(); 
+    })
+    .then(function(data) {
+        if (data.candidates && data.candidates[0]) {
+            var text = data.candidates[0].content.parts[0].text;
+            result.innerHTML += '<p class="ok">✅ РАБОТАЕТ! Ответ: ' + text + '</p>';
+        } else {
+            result.innerHTML += '<p class="err"> Не работает: ' + JSON.stringify(data.error || data).substring(0, 200) + '</p>';
         }
-        var btnText = t.done ? 'Вернуть' : 'Выполнено';
-        html += '<div class="' + cls + '">';
-        html += '<div class="txt">' + t.text.replace(/</g, '&lt;') + '</div>';
-        html += meta;
-        html += '<div class="actions">';
-        html += '<button class="done-btn" data-act="done" data-id="' + t.id + '">' + btnText + '</button>';
-        html += '<button class="edit-btn" data-act="edit" data-id="' + t.id + '">Изменить</button>';
-        html += '<button class="del-btn" data-act="del" data-id="' + t.id + '">Удалить</button>';
-        html += '</div></div>';
-    }
-    taskListEl.innerHTML = html;
+    })
+    .catch(function(e) {
+        result.innerHTML += '<p class="err">Ошибка: ' + e.message + '</p>';
+    });
 }
-
-function checkReminders() {
-    var now = Date.now();
-    var changed = false;
-    for (var i = 0; i < tasks.length; i++) {
-        var t = tasks[i];
-        if (t.reminderDate && t.reminderDate <= now && !t.done && !t.notified) {
-            t.notified = true;
-            changed = true;
-            try {
-                var ctx = new (window.AudioContext || window.webkitAudioContext)();
-                var osc = ctx.createOscillator();
-                var g = ctx.createGain();
-                osc.connect(g); g.connect(ctx.destination);
-                osc.frequency.value = 800;
-                g.gain.setValueAtTime(0.3, ctx.currentTime);
-                g.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.5);
-                osc.start(ctx.currentTime); osc.stop(ctx.currentTime + 0.5);
-            } catch(e) {}
-            if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('Напоминание', { body: t.text });
-            }
-            setTimeout(function() { alert('Напоминание: ' + t.text); }, 200);
-        }
-    }
-    if (changed) localStorage.setItem('tasks', JSON.stringify(tasks));
-}
-
-setInterval(checkReminders, 30000);
-renderTasks();
 </script>
 </body>
 </html>
