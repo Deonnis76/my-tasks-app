@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Мои Задачи с Напоминаниями</title>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#4a90e2">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; }
+        h1 { color: white; text-align: center; margin-bottom: 20px; font-size: 28px; }
+        .mic-btn { width: 100%; padding: 20px; background: white; color: #667eea; border: none; border-radius: 15px; font-size: 18px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); margin-bottom: 15px; }
+        .mic-btn:active { transform: scale(0.98); }
+        .add-btn { width: 100%; padding: 15px; background: #4CAF50; color: white; border: none; border-radius: 15px; font-size: 16px; font-weight: bold; cursor: pointer; margin-bottom: 20px; }
+        .status { text-align: center; color: white; margin-bottom: 15px; min-height: 20px; font-size: 14px; }
+        .modal { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 1000; align-items: center; justify-content: center; padding: 20px; }
+        .modal.active { display: flex; }
+        .modal-content { background: white; border-radius: 15px; padding: 25px; max-width: 500px; width: 100%; max-height: 90vh; overflow-y: auto; }
+        .modal-content h2 { margin-bottom: 20px; color: #333; }
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: bold; color: #555; }
+        .form-group input, .form-group select, .form-group textarea { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 16px; }
+        .btn-row { display: flex; gap: 10px; margin-top: 20px; }
+        .btn { flex: 1; padding: 12px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; }
+        .btn-save { background: #4CAF50; color: white; }
+        .btn-cancel { background: #ddd; color: #333; }
+        .task-list { list-style: none; }
+        .task-item { background: white; padding: 15px; margin-bottom: 10px; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); position: relative; }
+        .task-item.urgent { background: #fff3cd; border-left: 4px solid #ffc107; }
+        .task-item.overdue { background: #f8d7da; border-left: 4px solid #dc3545; }
+        .task-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px; }
+        .task-text { flex: 1; font-size: 16px; font-weight: 500; }
+        .task-text.done { text-decoration: line-through; color: #999; }
+        .task-meta { font-size: 13px; color: #666; margin-top: 5px; }
+        .task-meta span { margin-right: 15px; display: block; }
+        .task-actions { display: flex; gap: 5px; }
+        .task-btn { padding: 5px 10px; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; }
+        .btn-done { background: #4CAF50; color: white; }
+        .btn-delete { background: #ff4b4b; color: white; }
+        .empty { text-align: center; color: white; padding: 40px; font-size: 18px; }
+        .filter-tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .filter-tab { padding: 8px 15px; background: rgba(255,255,255,0.3); color: white; border: none; border-radius: 20px; cursor: pointer; font-size: 14px; }
+        .filter-tab.active { background: white; color: #667eea; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📝 Мои Задачи</h1>
+        <button class="mic-btn" id="micBtn">🎙️ Нажми и скажи задачу</button>
+        <button class="add-btn" id="addBtn">➕ Добавить задачу вручную</button>
+        <p class="status" id="status"></p>
+        <div class="filter-tabs">
+            <button class="filter-tab active" data-filter="all">Все</button>
+            <button class="filter-tab" data-filter="today">Сегодня</button>
+            <button class="filter-tab" data-filter="week">Неделя</button>
+            <button class="filter-tab" data-filter="month">Месяц</button>
+            <button class="filter-tab" data-filter="overdue">Просрочено</button>
+        </div>
+        <ul class="task-list" id="taskList"></ul>
+    </div>
+
+    <div class="modal" id="taskModal">
+        <div class="modal-content">
+            <h2 id="modalTitle">Новая задача</h2>
+            <div class="form-group">
+                <label>Описание задачи:</label>
+                <textarea id="taskText" rows="3" placeholder="Что нужно сделать?"></textarea>
+            </div>
+            <div class="form-group">
+                <label>Когда напомнить?</label>
+                <select id="reminderPreset">
+                    <option value="">Без напоминания</option>
+                    <option value="today">Сегодня (в 20:00)</option>
+                    <option value="tomorrow">Завтра (в 09:00)</option>
+                    <option value="week">Через неделю</option>
+                    <option value="month">Через месяц</option>
+                    <option value="year">Через год</option>
+                    <option value="custom">Выбрать дату и время</option>
+                </select>
+            </div>
+            <div class="form-group" id="customDateGroup" style="display:none;">
+                <label>Дата и время:</label>
+                <input type="datetime-local" id="customDate">
+            </div>
+            <div class="form-group">
+                <label>Период задачи:</label>
+                <select id="taskPeriod">
+                    <option value="day">День</option>
+                    <option value="week">Неделя</option>
+                    <option value="month">Месяц</option>
+                    <option value="year">Год</option>
+                </select>
+            </div>
+            <div class="btn-row">
+                <button class="btn btn-cancel" id="cancelBtn">Отмена</button>
+                <button class="btn btn-save" id="saveBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        let recognition = null;
+        if (SpeechRecognition) {
+            recognition = new SpeechRecognition();
+            recognition.lang = 'ru-RU';
+            recognition.interimResults = false;
+        } else {
+            alert("Для работы голоса используйте Google Chrome");
+        }
+
+        const micBtn = document.getElementById('micBtn');
+        const addBtn = document.getElementById('addBtn');
+        const status = document.getElementById('status');
+        const taskList = document.getElementById('taskList');
+        const taskModal = document.getElementById('taskModal');
+        const modalTitle = document.getElementById('modalTitle');
+        const taskText = document.getElementById('taskText');
+        const reminderPreset = document.getElementById('reminderPreset');
+        const customDateGroup = document.getElementById('customDateGroup');
+        const customDate = document.getElementById('customDate');
+        const taskPeriod = document.getElementById('taskPeriod');
+        const cancelBtn = document.getElementById('cancelBtn');
+        const saveBtn = document.getElementById('saveBtn');
+
+        let tasks = JSON.parse(localStorage.getItem('tasks')) || [];
+        let editingTaskId = null;
+        let currentFilter = 'all';
+
+        if ('Notification' in window && Notification.permission === 'default') {
+            Notification.requestPermission();
+        }
+
+        renderTasks();
+        checkReminders();
+        setInterval(checkReminders, 60000);
+
+        micBtn.addEventListener('click', () => {
+            if (!recognition) return;
+            status.textContent = "🎤 Слушаю...";
+            recognition.start();
+        });
+
+        if (recognition) {
+            recognition.addEventListener('result', (e) => {
+                const text = e.results[0][0].transcript;
+                status.textContent = "✓ " + text;
+                openModal(text);
+                setTimeout(() => status.textContent = "", 2000);
+            });
+            recognition.addEventListener('end', () => {
+                if (status.textContent === "🎤 Слушаю...") status.textContent = "";
+            });
+        }
+
+        addBtn.addEventListener('click', () => openModal());
+
+        function openModal(text = '') {
+            editingTaskId = null;
+            modalTitle.textContent = 'Новая задача';
+            taskText.value = text;
+            reminderPreset.value = '';
+            customDateGroup.style.display = 'none';
+            customDate.value = '';
+            taskPeriod.value = 'day';
+            taskModal.classList.add('active');
+        }
+
+        cancelBtn.addEventListener('click', () => { taskModal.classList.remove('active'); });
+
+        reminderPreset.addEventListener('change', () => {
+            customDateGroup.style.display = reminderPreset.value === 'custom' ? 'block' : 'none';
+        });
+
+        saveBtn.addEventListener('click', () => {
+            const text = taskText.value.trim();
+            if (!text) { alert('Введите описание задачи'); return; }
+
+            let reminderDate = null;
+            const preset = reminderPreset.value;
+            const now = new Date();
+
+            if (preset === 'today') {
+                reminderDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 20, 0);
+            } else if (preset === 'tomorrow') {
+                reminderDate = new Date(now.getTime() + 24 * 60 * 60 * 
